@@ -1,6 +1,6 @@
-# Dyno Music
+# Blade Music
 
-A terminal-based playwright app that allows you to batch download music from dab.yeet.su
+A terminal-based playwright app that allows you to batch download music from https://dabmusic.xyz/
 
 ## Features
 
@@ -19,13 +19,13 @@ A terminal-based playwright app that allows you to batch download music from dab
 Clone the project
 
 ```bash
-  git clone https://github.com/super-roomi/Dyno-Music.git
+  git clone https://github.com/VanitasBlade/Music-Web-App-Crawler.git
 ```
 
 Go to the project directory
 
 ```bash
-  cd Dyno-Music
+  cd Music-Web-App-Crawler
 ```
 
 Install dependencies
@@ -36,7 +36,7 @@ Install dependencies
 
 Install a browser
 ```bash
-  # Dyno-Music
+  # Blade Music
 
   A small Node.js command-line utility for searching and downloading songs.
 
@@ -49,7 +49,7 @@ Install a browser
   - Project Structure
   - Development
   - Contributing
-  - License
+
 
   ## Installation
 
@@ -83,7 +83,7 @@ Install a browser
   - `src/search.js` — search utilities and query handling
   - `src/downloader.js` — download worker and stream handling
   - `src/browser.js` — browser automation / scraping helpers
-  - `src/logger.js` — logging wrapper used across modules
+  - `src/logger.js` — logging wrapper used across modules(No logger activity currently)
   - `src/config.js` — runtime configuration
   - `songs/` — default output directory for downloaded tracks
 
