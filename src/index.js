@@ -3,7 +3,7 @@ import promptSync from "prompt-sync";
 
 import { createBrowser } from "./browser.js";
 import { BASE_URL } from "./config.js";
-import { downloadSong } from "./download.js";
+import { downloadSong } from "./downloader.js";
 import { searchSongs } from "./search.js";
 
 const prompt = promptSync();
