@@ -7,7 +7,7 @@ export async function createBrowser() {
 
   const context = await browser.newContext({
     acceptDownloads: true,
-    ignoreHTTPSErrors: true, 
+    ignoreHTTPSErrors: true,
   });
 
   const page = await context.newPage();
