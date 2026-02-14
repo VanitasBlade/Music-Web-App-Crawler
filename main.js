@@ -33,7 +33,8 @@ const fallbackLink = "https://us.qobuz.squid.wtf/";
   // Step 1: Route to dabmusic.xyz
   console.log(" 🌐 Routing to dabmusic.xyz...");
   await page.goto(mainLink);
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(3000);
 
   // Step 2: Get song search query from user
   const searchQuery = prompt("🔍 Enter song name to search: ");
@@ -48,6 +49,7 @@ const fallbackLink = "https://us.qobuz.squid.wtf/";
   // Step 3: Perform search
   console.log(" 🔍 Searching for: " + searchQuery);
   const searchBox = page.getByRole("textbox", { name: "Search query" });
+  await searchBox.waitFor({ timeout: 60000 });
   await searchBox.click({ timeout: 60000 });
   await searchBox.fill(searchQuery);
   await page.waitForTimeout(2000);
