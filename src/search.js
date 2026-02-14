@@ -1,185 +1,123 @@
-import { SELECTORS } from "./config.js";
+
 export async function searchSongs(page, query) {
-  // ensure page finished loading
+  console.log("🔍 Searching for:", query);
+  
+  // Wait for page to be ready
   await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(2000);
 
-  // dismiss common overlays/cookies if present
+  // Find the search input
+  const searchInput = page.locator('input[placeholder="Search for songs, artists, or albums..."]').first();
+  
   try {
-    const overlays = page.locator(
-      'button:has-text("Accept"), button:has-text("I agree"), button:has-text("Close"), button:has-text("Got it")'
-    );
-    const overlayCount = await overlays.count();
-    for (let i = 0; i < overlayCount; i++) {
-      const b = overlays.nth(i);
-      if (await b.isVisible()) {
-        await b.click().catch(() => {});
-      }
-    }
-  } catch (e) {}
-
-  // wait for the input with a visible state, use fallback if needed
-  const inputSelector = SELECTORS.searchInput;
-  try {
-    await page.waitForSelector(inputSelector, { state: "visible", timeout: 15000 });
+    await searchInput.waitFor({ state: "visible", timeout: 10000 });
+    console.log("✅ Found search input");
   } catch (e) {
-    console.warn("WARN: input not visible within 15s, will try attached+DOM fallback");
-    const fallback = 'input[placeholder*="Search"], input[type="search"], input';
-    try {
-      // wait until an input is attached to the DOM (may still be hidden)
-      await page.waitForSelector(fallback, { state: "attached", timeout: 15000 });
-    } catch (e2) {
-      console.warn("WARN: no input attached within 15s");
-      // continue; we'll attempt evaluate-based find later which will handle nulls
-    }
+    throw new Error("Search input not found");
   }
 
-  // attempt to fill the input robustly
-  let inputLocator = page.locator(inputSelector).first();
-  let filled = false;
+  // Fill the input
+  await searchInput.click();
+  await searchInput.clear();
+  await searchInput.fill(query);
+  console.log("✅ Query entered:", query);
+  
+  await page.waitForTimeout(500);
 
-  // helper: try a locator if present and visible
-  const tryLocatorFill = async (loc) => {
-    try {
-      if ((await loc.count()) && (await loc.isVisible())) {
-        await loc.fill(query, { timeout: 20000 });
-        return true;
-      }
-    } catch (e) {}
-    return false;
-  };
+  // Set up listener for the search API call BEFORE pressing Enter
+  const apiPromise = page.waitForResponse(
+    response => response.url().includes('/api/search'),
+    { timeout: 15000 }
+  );
 
-  // 1) Try primary locator on main page
-  filled = await tryLocatorFill(inputLocator);
+  // Focus the input and press Enter (this is what works!)
+  console.log("⌨️  Pressing Enter to search...");
+  await searchInput.focus();
+  await page.keyboard.press('Enter');
 
-  // 2) Try explicit aria-labeled input
-  if (!filled) {
-    inputLocator = page.locator('input[aria-label="Search query"]').first();
-    filled = await tryLocatorFill(inputLocator);
-  }
-
-  // 3) Try all frames (covers iframes) and use DOM-based set for shadow roots
-  if (!filled) {
-    const frames = page.frames();
-    for (const f of frames) {
-      try {
-        const ok = await f.evaluate((q) => {
-          // recursively search root + shadow roots for an input-like element
-          function findInRoot(root) {
-            const selectors = [
-              'input[aria-label="Search query"]',
-              'input[placeholder*="Search"]',
-              'input[type="search"]',
-              'input',
-              '[contenteditable="true"]',
-              'div[role="search"]',
-              'textarea'
-            ];
-
-            for (const s of selectors) {
-              const el = root.querySelector(s);
-              if (el) return el;
-            }
-
-            const all = root.querySelectorAll('*');
-            for (const node of all) {
-              if (node.shadowRoot) {
-                const found = findInRoot(node.shadowRoot);
-                if (found) return found;
-              }
-            }
-            return null;
-          }
-
-          const el = findInRoot(document);
-          if (!el) return false;
-          try {
-            if (el.disabled) el.disabled = false;
-            // set both value and attribute, dispatch input events
-            el.value = q;
-            el.setAttribute && el.setAttribute('value', q);
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.focus && el.focus();
-            // try click to ensure frameworks pick up the change
-            try { el.click && el.click(); } catch(e) {}
-            return true;
-          } catch (err) {
-            return false;
-          }
-        }, query);
-
-        if (ok) {
-          filled = true;
-          console.log('INFO: search input set via frame/shadow fallback');
-          break;
-        }
-      } catch (e) {}
-    }
-  }
-
-  // 4) Final DOM fallback on main document
-  if (!filled) {
-    const ok = await page.evaluate((q) => {
-      const el =
-        document.querySelector('input[aria-label="Search query"]') ||
-        document.querySelector('input[placeholder*="Search"]') ||
-        document.querySelector('input[type="search"]') ||
-        document.querySelector('input') ||
-        document.querySelector('[contenteditable="true"]') ||
-        document.querySelector('div[role="search"]') ||
-        document.querySelector('textarea');
-      if (!el) return false;
-      try {
-        if (el.disabled) el.disabled = false;
-        el.value = q;
-        el.setAttribute && el.setAttribute('value', q);
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.focus && el.focus();
-        el.blur && el.blur();
-        return true;
-      } catch (err) {
-        return false;
-      }
-    }, query);
-
-    if (!ok) {
-      throw new Error('Unable to locate or set any input element on page');
-    } else {
-      console.log('INFO: search input set via DOM fallback');
-    }
-  }
-
-  // submit search: try form submit button, then fallback to Enter
+  // Wait for the API call
   try {
-    await page.click(SELECTORS.searchButton, { timeout: 10000 });
-  } catch {
-    try {
-      await inputLocator.press('Enter');
-    } catch {
-      await page.keyboard.press('Enter');
-    }
+    await apiPromise;
+    console.log("✅ Search API called successfully");
+  } catch (e) {
+    throw new Error("Search API did not respond");
   }
 
-  // wait for results container
-  await page.waitForSelector(SELECTORS.resultsContainer, { timeout: 20000 });
+  // Wait for results to render
+  console.log("⏳ Waiting for results to render...");
+  await page.waitForTimeout(3000);
 
-  const results = page.locator(SELECTORS.resultsContainer);
-  const count = await results.count();
+  // Find all song cards (those with "Download FLAC" button)
+  const allCards = page.locator('div.rounded-lg.border');
+  const cardCount = await allCards.count();
+  
+  console.log(`📊 Found ${cardCount} total cards`);
 
   const songs = [];
 
-  for (let i = 0; i < count; i++) {
-    const result = results.nth(i);
+  for (let i = 0; i < cardCount; i++) {
+    const card = allCards.nth(i);
+    
+    // Check if this card has a Download FLAC button (tracks only)
+    const hasDownloadButton = await card.locator('button:has-text("Download FLAC")').count() > 0;
+    
+    if (!hasDownloadButton) {
+      continue; // Skip album cards
+    }
 
-    const title = (await result.locator(SELECTORS.title).textContent())?.trim() || 'Unknown';
-    const artist = (await result.locator(SELECTORS.artist).first().textContent())?.trim() || 'Unknown';
+    try {
+      // Get song title from h3
+      let title = 'Unknown';
+      const h3 = card.locator('h3').first();
+      if (await h3.count() > 0) {
+        const titleText = await h3.textContent();
+        title = titleText?.trim() || 'Unknown';
+      }
 
-    songs.push({
-      index: i,
-      title,
-      artist,
-      element: result,
-    });
+      // Get artist name from paragraphs
+      let artist = 'Unknown';
+      const paragraphs = await card.locator('p').all();
+      
+      for (const p of paragraphs) {
+        const text = await p.textContent();
+        const trimmedText = text?.trim() || '';
+        
+        // Skip album info and audio quality info
+        if (trimmedText && 
+            !trimmedText.startsWith('Album:') && 
+            !trimmedText.includes('16bit') &&
+            !trimmedText.includes('kHz') &&
+            trimmedText !== title &&
+            trimmedText.length > 0) {
+          
+          // Clean up artist text
+          artist = trimmedText.replace(/^[♪♫🎵🎶]\s*/, '').trim();
+          break;
+        }
+      }
+
+      songs.push({
+        index: songs.length,
+        title,
+        artist,
+        element: card,
+      });
+
+      console.log(`  [${songs.length}] ${title} - ${artist}`);
+      
+    } catch (e) {
+      console.warn(`⚠️  Could not parse card ${i}`);
+    }
   }
 
+  if (songs.length === 0) {
+    console.log("❌ No track results found");
+    
+    // Take a screenshot for debugging
+    await page.screenshot({ path: 'no-results-debug.png', fullPage: true });
+    console.log("📸 Screenshot saved to no-results-debug.png");
+  }
+
+  console.log(`\n✅ Found ${songs.length} track(s)\n`);
   return songs;
 }
